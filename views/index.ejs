@@ -1,0 +1,368 @@
+<!DOCTYPE HTML PUBLIC "-//W3C/DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>twitter_cp</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+
+<link rel="shortcut icon" href="/twitter_cp.png" type="image/png"/>
+<link rel="icon" href="/twitter_cp.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/twitter_cp.png"/>
+
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="apple-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="Twitter CP"/>
+
+<!-- // OGP tags -->
+<meta property="og:title" content="Twitter CP"/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://twitter_cp.mybluemix.net/"/>
+<meta property="og:image" content="https://twitter_cp.mybluemix.net/wgt.png"/>
+<meta property="og:site_name" content="Twitter CP"/>
+<!-- OGP tags // -->
+
+<!-- // Twitter Card -->
+<meta property="twitter:card" content="summary"/>
+<meta property="twitter:site" content="@dotnsf"/>
+<meta property="twitter:creator" content="@dotnsf"/>
+<meta property="twitter:url" content="https://twitter_cp.mybluemix.net/"/>
+<meta property="twitter:image" content="https://twitter_cp.mybluemix.net/wgt.png"/>
+<meta property="twitter:title" content="Twitter CP"/>
+<meta property="twitter:description" content="Twitter CP"/>
+<!-- Twitter Card // -->
+
+<meta name="description" content="Twitter CP"/>
+<meta name="keywords" content="Twitter CP"/>
+
+
+<script src="//code.jquery.com/jquery-2.0.3.min.js"></script>
+<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.3.0/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.3.0/js/bootstrap.min.js"></script>
+<link href="//use.fontawesome.com/releases/v5.6.3/css/all.css" rel="stylesheet"/>
+
+<script src="./cvi_busy_lib.js"></script>
+
+
+<script>
+var user_id = '';
+
+$(function(){
+<%
+if( user != null ){
+%>
+  user_id = '<%= user.screen_name %>';
+
+  //. ログインしている
+  var dropdown = '<div class="dropdown"><button type="button" class="btn btn-secondary dropdown-toggle" id="navbarDropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-user"></i> <!-- <img width="20" height="20" src="http://www.paper-glasses.com/api/twipi/<%= user.screen_name %>/original"/> --><%= user.screen_name %></button>'
+    + '<div class="dropdown-menu" aria-labelledby="navbarDropdownMenuButton">'
+    + '<a class="dropdown-item" href="#" title="logout" onClick="logout();"><i class="fas fa-sign-out-alt"></i> Logout</a>'
+    + '</div>'
+    + '</div>';
+  $('#navbar').append( '<li class="nav-item">' + dropdown + '</li>' );
+
+  //initTable();
+<%
+}else{
+%>
+  //. ログインしていない
+  $('#navbar').append( '<li class="nav-item"><a class="nav-link" href="#" onClick="login()"><i class="fas fa-sign-in-alt"></i>Login</a></li>' );
+<%
+}
+%>
+});
+
+function checkUrl(){
+  var url = $('#url').val();
+  if( url ){
+    $('#myModalLabel').text( url );
+    $('#myModalIFrame').prop( "src", "/api/xframe?url=" + url );
+  }
+}
+
+function record(){
+  var url = $('#url').val();
+  var comment = $('#myModalComment').val();
+  console.log( 'record(): ' + url + ' : ' + comment );
+  if( url ){
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'POST',
+      url: '/api/item',
+      data: { url: url, comment: comment, user_id: user_id },
+      success: function( body ){
+        obj.remove();
+        if( body && body.status ){
+          console.log( body.message );
+          $('#url').val( '' );
+          location.reload();
+        }
+      },
+      error: function( err ){
+        obj.remove();
+        console.log( err );
+      }
+    });
+  }
+}
+
+function compareByCreated( a, b ){
+  var r = 0;
+  if( a.created < b.created ){ r = -1; }
+  else if( a.created > b.created ){ r = 1; }
+
+  return r;
+}
+
+function initTable(){
+  $('#itemtable_body').html( '' );
+
+  var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+  $.ajax({
+    type: 'GET',
+    url: '/api/query?user_id=' + user_id,
+    success: function( result ){
+      obj.remove();
+      //console.log( result );
+      if( result.status ){
+        result.docs.forEach( function( item ){
+          //console.log( item );
+          var tr = '<tr>'
+            + '<td><a target="_blank" href="/single/' + item._id + '">' + item._id + '</a></td>'
+            + '<td>' + item.comment + '</td>'
+            + '<td>' + url4display( item.url ) + '</td>'
+            + '<td>' + timestamp2datetime( item.timestamp ) + '</td>'
+            + '<td><input class="btn btn-xs btn-danger" type="button" value="DELETE" onClick="deleteItem(\'' + item._id + '\')"/></td>'
+            + '</tr>';
+          $('#itemtable_body').append( tr );
+        });
+
+        $('#itemtable').DataTable({
+          lengthMenu: [ [ 5, 10, 50, 100, -1 ], [ 5, 10, 50, 100, "All" ] ],
+          columnDefs: [{
+            targets: [ 0, 4 ],
+            orderable: false,
+            searchable: false
+          }],
+          order: [ [ 3, 'desc' ] ]
+        });
+      }
+    },
+    error: function( err ){
+      obj.remove();
+      console.log( err );
+    }
+  });
+}
+
+function deleteItem( id ){
+  if( id && confirm( '削除してよろしいですか？' ) ){
+    $.ajax({
+      type: 'DELETE',
+      url: '/api/item',
+      data: { id: id, user_id: user_id },
+      success: function( body ){
+        console.log( body );
+        location.reload();
+      },
+      error: function( err ){
+        console.log( err );
+      }
+    });
+  }
+}
+
+function timestamp2datetime( ts ){
+  var dt = new Date( ts );
+  var yyyy = dt.getFullYear();
+  var mm = dt.getMonth() + 1;
+  var dd = dt.getDate();
+  var hh = dt.getHours();
+  var nn = dt.getMinutes();
+  var ss = dt.getSeconds();
+  var datetime = yyyy + '-' + ( mm < 10 ? '0' : '' ) + mm + '-' + ( dd < 10 ? '0' : '' ) + dd
+    + ' ' + ( hh < 10 ? '0' : '' ) + hh + ':' + ( nn < 10 ? '0' : '' ) + nn + ':' + ( ss < 10 ? '0' : '' ) + ss;
+  return datetime;
+}
+
+function url4display( url, n ){
+  if( !n ){ n = 30; }
+  var s = '';
+  if( url && url.length > n ){
+    s = '<a href="' + url + '" target="_blank" title="' + url + '">' + url.substr( 0, n ) + '..</a>';
+  }else{
+    s = '<a href="' + url + '" target="_blank">' + url + '</a>';
+  }
+
+  return s;
+}
+
+function id4display( id, n ){
+  if( !n ){ n = 10; }
+  var s = '';
+  if( id && id.length > n ){
+    s = '<a href="#" title="' + id + '">' + id.substr( 0, n ) + '..</a>';
+  }else{
+    s = '<a href="#">' + id + '</a>';
+  }
+
+  return s;
+}
+
+function login(){
+  //window.location.href = '/login';
+  window.location.href = '/twitter';
+}
+
+function logout(){
+  if( window.confirm( 'Logout?' ) ){
+    var obj = getBusyOverlay( 'viewport', {color:'black', opacity:0.5, text:'loading', style:'text-decoration:blink; font-weight:bold; font-size:12px; color:white;' } );
+    $.ajax({
+      type: 'POST',
+      url: '/logout',
+      data: {},
+      success: function( data ){
+        obj.remove();
+        window.location.href = '/';
+      },
+      error: function(){
+        obj.remove();
+        window.location.href = '/';
+      }
+    });
+  }
+}
+</script>
+<style>
+.circle{
+  width: 100px;
+  height: 100px;
+  text-align: center;
+  border-radius: 50%;
+  background: #fafafa;
+  border-style: solid;
+  border-color: #ffcc33;
+  z-index: 2;
+}
+/*
+.my-slider{
+  position: relative;
+  top: -80px;
+  z-index: 1;
+}
+*/
+.star-rating{
+  display: inline-block;
+  line-height: 100px;
+  position: relative;
+  width: 3em;
+  height: 1em;
+  font-size: 25px;
+}
+.star-rating-front{
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  color: #ffcc33;
+}
+.star-rating-back{
+  color: #cccccc;
+}
+#my_wrapper{
+  background: linear-gradient(90deg, rgb(0,23,55), rgb(31,74,115));
+}
+#my_inner{
+  background: linear-gradient(180deg, rgb(248,248,248), rgb(44,116,150));
+}
+.my-slider{
+  position: relative;
+  top: -20px;
+  z-index: 1;
+  //width: 200px;
+  width: 40%;
+  color: #ee9219;
+  background: #fafafa;
+  padding: 30px 30px 30px 30px;
+  margin: 50px 10px 10px 10px;
+  border-radius: 5px;
+  border-style: solid;
+  //border-color: #ffcc33;
+  border-color: #fafafa;
+}
+#ai{
+  position: relative;
+  top: -350px;
+  width: 60%;
+  margin-left: auto;
+}
+#ai_img{
+  width: 100%;
+}
+</style>
+</head>
+<body>
+
+<nav class="navbar navbar-light bg-light">
+  <a class="navbar-brand" href="#">twitter_cp</a>
+  <ul class="navbar-nav mr-auto">
+  </ul>
+  <ul class="navbar-nav float-right" style="float:right!important;" id="navbar">
+  </ul>
+</nav>
+
+<%
+if( user != null ){
+%>
+<div class="container" id="my_wrapper" style="padding: 100px 50px 50px 50px;">
+  <div id="my_inner" style="padding: 50px 50px 50px 50px;">
+    <div style="text-align: center">
+      <img src="/profileimage?screen_name=<%= user.screen_name %>" style="width:200px; height: 200px;"/><br/>
+      <h3><%= user.screen_name %></h3>
+      <div class="progress" style="width: 30%; margin-left: auto; margin-right: auto;">
+        <div class="progress-bar bg-success" style="width: 100%;"></div>
+      </div>
+    </div>
+
+    <div class="circle">
+    <div class="star-rating">
+      <div class="star-rating-front">★★★</div>
+      <div class="star-rating-back">★★★</div>
+    </div>
+    </div>
+
+    <div class="my-slider">
+<%
+if( result != null && result.personality != null ){
+  var p_avg = 0.0;
+  for( var i = 0; i < result.personality.length; i ++ ){
+    var p = result.personality[i];
+    p_avg += p.percentile;
+%>
+    <%= p.name %>
+    <div class="progress">
+    <div class="progress-bar bg-warning" style="width: <%= Math.floor( p.percentile * 11 ) %>0%;"></div>
+    </div>
+<%
+  }
+  p_avg = p_avg * 4 / 5;
+  var p_star = Math.floor( p_avg );  //. 0-3
+%>
+<script>
+$('.star-rating-front').css( 'width', '<%= p_star * 33.3 %>%' );
+</script>
+<%
+}
+%>
+    </div>
+
+    <div id="ai">
+      <img id="ai_img" src="https://2.bp.blogspot.com/-fJsCebytgzs/WEztEsF55QI/AAAAAAABAT8/LUPK2AehY2MrJFZCl5rdT6r_TzgKLUC9gCLcB/s400/ai_character.png"/>
+    </div>
+  </div>
+</div>
+<%
+}
+%>
+
+</body>
+</html>
