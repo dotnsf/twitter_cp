@@ -38,18 +38,11 @@
 <script src="//code.jquery.com/jquery-2.0.3.min.js"></script>
 <link href="//maxcdn.bootstrapcdn.com/bootstrap/4.3.0/css/bootstrap.min.css" rel="stylesheet"/>
 <script src="//maxcdn.bootstrapcdn.com/bootstrap/4.3.0/js/bootstrap.min.js"></script>
-<link href="//use.fontawesome.com/releases/v5.6.3/css/all.css" rel="stylesheet"/>
 
 
 <script>
 $(function(){
-  $('#navbar').append( '<li class="nav-item"><a class="nav-link" href="#" onClick="login()"><i class="fas fa-sign-in-alt"></i>Login</a></li>' );
 });
-
-function login(){
-  //window.location.href = '/login';
-  window.location.href = '/twitter';
-}
 </script>
 <style>
 </style>
@@ -65,12 +58,9 @@ function login(){
 </nav>
 
 <div class="container" style="padding: 50px 50px 50px 50px;">
-  画面右上の "Login" と書かれたボタンをタップ（クリック）し、Twitter ID でログインしてください。
-  直近の 200 ツイートの内容を元に AI があなたの性格を分析します。<p/>
-  スマホで見る場合、画面を横にすると見やすくなります。
-  <div style="text-align: center;">
-  （例）<br/><img src="/twitter_top.png" width="40%"/>
-  </div>
+<pre>
+<%= JSON.stringify( error, null, 2 ) %>
+</pre>
 </div>
 
 </body>

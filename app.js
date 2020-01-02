@@ -2,6 +2,7 @@
 
 var express = require( 'express' ),
     bodyParser = require( 'body-parser' ),
+    cloudantlib = require( '@cloudant/cloudant' ),
     ejs = require( 'ejs' ),
     fs = require( 'fs' ),
     jwt = require( 'jsonwebtoken' ),
@@ -15,13 +16,7 @@ var express = require( 'express' ),
     app = express();
 var { IamAuthenticator } = require( 'ibm-watson/auth' );
 var settings = require( './settings' );
-/*
-var pi = new watson_pi_v3({
-  username: settings.pi_username,
-  password: settings.pi_password,
-  version_date: '2016-10-20'
-});
-*/
+
 var pi = new watson_pi_v3({
   authenticator: new IamAuthenticator({
     apikey: settings.watson_pi_apikey
@@ -29,6 +24,28 @@ var pi = new watson_pi_v3({
   url: settings.watson_pi_url,
   version: '2017-10-13'
 });
+
+var db = null;
+var cloudant = cloudantlib( { account: settings.cloudant_username, password: settings.cloudant_password } );
+if( cloudant ){
+  cloudant.db.get( settings.cloudant_dbname, function( err, body ){
+    if( err ){
+      if( err.statusCode == 404 ){
+        cloudant.db.create( settings.cloudant_dbname, function( err, body ){
+          if( err ){
+            db = null;
+          }else{
+            db = cloudant.db.use( settings.cloudant_dbname );
+          }
+        });
+      }else{
+        db = cloudant.db.use( settings.cloudant_dbname );
+      }
+    }else{
+      db = cloudant.db.use( settings.cloudant_dbname );
+    }
+  });
+}
 
 app.use( bodyParser.urlencoded( { extended: true } ) );
 app.use( bodyParser.json() );
@@ -126,19 +143,31 @@ app.get( '/twitter/callback', function( req, res ){
             pi.profile( pi_params, function( error, response ){
               var result = {};
               if( error ){
-                result = { status: false, error: error };
               }else{
-                result = { status: true, result: response };
                 req.session.result = response.result;
-
                 //. { word_count: 9100, personality: [], needs[], values[], .. }
-                //console.log( JSON.stringify( response.result, null, 2 ) ); //. result.result.result
               }
-              //console.log( result ); //. result.result.result
 
-              res.redirect( '/' );
-              //res.write( JSON.stringify( result ) );
-              //res.end();
+              var doc = {
+                user: {
+                  user_id: results.user_id,
+                  screen_name: results.screen_name
+                },
+                result: response.result,
+                datetime: timestamp2datetime( ( new Date() ).getTime() )
+              };
+              db.insert( doc, function( err, body ){
+                var id = '';
+                if( err ){
+                  console.log( JSON.stringify( err ) );
+                }else{
+                  id = body.id;
+                  //console.log( JSON.stringify( body ) );
+                }
+
+                //res.redirect( '/' );
+                res.redirect( '/insight?id=' + id );
+              });
             });
           }
         });
@@ -176,30 +205,21 @@ app.get( '/', function( req, res ){
   }
 });
 
-app.post( '/postpi', function( req, res ){
-  var text = req.body.text;
+app.get( '/insight', function( req, res ){
+  var id = req.query.id;
 
-  var pi_params = {
-    text: text,
-    consumption_preferences: true,
-    raw_scores: true,
-    headers: {
-      'accept-language': 'ja',
-      'content-language': 'ja',
-      'accept': 'application/json'
-    }
-  };
-  pi.profile( pi_params, function( error, response ){
-    var result = {};
-    if( error ){
-      result = { status: false, error: error };
-    }else{
-      result = { status: true, result: response };
-    }
-
-    res.write( JSON.stringify( result ) );
-    res.end();
-  });
+  if( id && db ){
+    db.get( id, { include_docs: true }, function( err, doc ){
+      if( err ){
+        res.render( 'error', { id: id, error: err } );
+      }else{
+        doc.id = id;
+        res.render( 'insight', doc );
+      }
+    });
+  }else{
+    res.render( 'error', { id: id, error: { message: "id and/or db is null." } } );
+  }
 });
 
 app.get( '/profileimage', function( req, res ){
@@ -220,6 +240,20 @@ app.get( '/profileimage', function( req, res ){
     return res.status( 403 ).send( { status: false, error: 'No screen_name provided.' } );
   }
 });
+
+function timestamp2datetime( ts ){
+  var dt = new Date( ts );
+  var yyyy = dt.getFullYear();
+  var mm = dt.getMonth() + 1;
+  var dd = dt.getDate();
+  var hh = dt.getHours();
+  var nn = dt.getMinutes();
+  var ss = dt.getSeconds();
+  //var datetime = yyyy + '-' + ( mm < 10 ? '0' : '' ) + mm + '-' + ( dd < 10 ? '0' : '' ) + dd
+  //  + ' ' + ( hh < 10 ? '0' : '' ) + hh + ':' + ( nn < 10 ? '0' : '' ) + nn + ':' + ( ss < 10 ? '0' : '' ) + ss;
+  var datetime = yyyy + '年' + mm + '月' + dd + '日';
+  return datetime;
+}
 
 var port = process.env.port || 8080;
 app.listen( port );
